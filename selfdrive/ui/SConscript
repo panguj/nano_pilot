@@ -7,6 +7,8 @@ base_libs = [gpucommon, common, messaging, cereal, visionipc, transformations, '
 
 maps = arch in ['larch64', 'x86_64']
 
+base_libs += ['rt']
+
 if arch == 'aarch64':
   base_libs += ['log', 'utils', 'gui', 'ui', 'CB', 'gsl', 'adreno_utils', 'cutils', 'uuid']
 

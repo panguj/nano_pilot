@@ -119,6 +119,7 @@ static void draw_vision_frame(UIState *s) {
       // this is handled in ion on QCOM
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, s->last_frame->width, s->last_frame->height,
                    0, GL_RGB, GL_UNSIGNED_BYTE, s->last_frame->addr);
+      glGenerateMipmap(GL_TEXTURE_2D);
     }
   }
 

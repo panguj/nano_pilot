@@ -12,7 +12,7 @@ else:
   if USE_MIPI or USE_WEBCAM:
     flag = "MIPI" if USE_MIPI else "WEBCAM"
 
-    libs += ['opencv_core', 'opencv_highgui', 'opencv_imgproc', 'opencv_videoio']
+    libs += ['opencv_core', 'opencv_highgui', 'opencv_imgproc', 'opencv_videoio', 'rt']
     if USE_MIPI:
       libs += ['opencv_cudawarping']
     cameras = ['cameras/camera_%s.cc' % flag.lower()]

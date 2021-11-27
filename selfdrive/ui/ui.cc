@@ -13,6 +13,7 @@
 #include "selfdrive/hardware/hw.h"
 #include "selfdrive/ui/paint.h"
 #include "selfdrive/ui/qt/qt_window.h"
+#include <sys/mman.h>
 
 #define BACKLIGHT_DT 0.05
 #define BACKLIGHT_TS 10.00
@@ -210,6 +211,22 @@ static void update_params(UIState *s) {
 }
 
 static void update_vision(UIState *s) {
+  const char *name = "/CameraShared";    // file name
+  const int SIZE = 3052008;;        // file size 
+  static unsigned char *shm_base;
+  int shm_fd;
+  static int first = 1;
+  if (first) {
+  first = 0;
+  shm_fd = shm_open(name, O_RDONLY, 0666);
+  if (shm_fd == -1) {
+    printf("cons: Shared memory failed: %s\n", strerror(errno));
+    exit(1);
+  }
+
+  /* map the shared memory segment to the address space of the process */
+  shm_base = (unsigned char *)mmap(0, SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+  }
   if (!s->vipc_client->connected && s->scene.started) {
     if (s->vipc_client->connect(false)) {
       ui_init_vision(s);
@@ -220,6 +237,20 @@ static void update_vision(UIState *s) {
     VisionBuf * buf = s->vipc_client->recv();
     if (buf != nullptr) {
       s->last_frame = buf;
+      buf->addr = shm_base;
+/*
+      if (!(s->last_frame->addr)) {
+          s->last_frame->addr = (unsigned char *) malloc(3052008);
+          memcpy(s->last_frame->addr, shm_base, 3052008);
+          std::cout <<"update_vision, buf->y has no allocation" <<std::endl;
+      } else {
+          memcpy(s->last_frame->addr, shm_base, 3052008);
+          std::cout <<"update_vision, buf->y has allocated" <<std::endl;
+//         image_mat = cv::imread("/tmp/test2.png");
+//         std::cout <<"update_vision, read test2.png" <<std::endl;
+//         s->last_frame->addr = image_mat.data;
+     }
+*/
     } else if (!Hardware::PC() && !Hardware::JETSON()) {
       LOGE("visionIPC receive timeout");
     }

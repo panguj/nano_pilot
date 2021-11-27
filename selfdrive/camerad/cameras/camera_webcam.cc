@@ -12,6 +12,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
 #pragma clang diagnostic pop
+#include <sys/mman.h>
 
 #include "selfdrive/common/clutil.h"
 #include "selfdrive/common/swaglog.h"
@@ -70,11 +71,28 @@ void camera_init(VisionIpcServer * v, CameraState *s, int camera_id, unsigned in
 
 void run_camera(CameraState *s, cv::VideoCapture &video_cap, float *ts) {
   assert(video_cap.isOpened());
-
+  int shm_fd;  
   cv::Size size(s->ci.frame_width, s->ci.frame_height);
   const cv::Mat transform = cv::Mat(3, 3, CV_32F, ts);
   uint32_t frame_id = 0;
   size_t buf_idx = 0;
+  const int SIZE = 3052008;;        // file size 
+
+  unsigned char *shm_base; 
+  shm_fd = shm_open("/CameraShared", O_CREAT | O_RDWR, 0666);
+  if (shm_fd == -1) {
+    printf("prod: Shared memory failed: %s\n", strerror(errno));
+    exit(1);
+  }
+
+  /* configure the size of the shared memory segment */
+  ftruncate(shm_fd, SIZE);
+  shm_base = (unsigned char *) mmap(0, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  if (shm_base == MAP_FAILED) {
+    printf("prod: Map failed: %s\n", strerror(errno));
+    // close and shm_unlink?
+    exit(1);
+  }
 
   while (!do_exit) {
     cv::Mat frame_mat, transformed_mat;
@@ -82,13 +100,13 @@ void run_camera(CameraState *s, cv::VideoCapture &video_cap, float *ts) {
     if (frame_mat.empty()) continue;
 
     cv::warpPerspective(frame_mat, transformed_mat, transform, size, cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
-
     s->buf.camera_bufs_metadata[buf_idx] = {.frame_id = frame_id};
 
     auto &buf = s->buf.camera_bufs[buf_idx];
     int transformed_size = transformed_mat.total() * transformed_mat.elemSize();
+    memcpy(shm_base, transformed_mat.data, transformed_size);
+    printf("memcopy to shared: %d\n", transformed_size); 
     CL_CHECK(clEnqueueWriteBuffer(buf.copy_q, buf.buf_cl, CL_TRUE, 0, transformed_size, transformed_mat.data, 0, NULL, NULL));
-
     s->buf.queue(buf_idx);
 
     ++frame_id;
